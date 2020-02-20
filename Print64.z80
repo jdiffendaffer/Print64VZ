@@ -1,0 +1,608 @@
+;**************************************************
+;* NAME: print64demo
+;**************************************************
+;* DESCRIPTION:
+;*   Z80 TASM demo of print64 routines
+;*   Copyright (c) 2011-2013 by James Diffendaffer
+;* Version: 1.05 Date: March 11, 2013
+;* 1.04 Date: Feb 15, 2013 - Initial VZ code
+;**************************************************
+
+#define EQU     .EQU
+#define ORG     .ORG
+#define RMB     .BLOCK
+#define DEFB	.BYTE
+#define FCC     .TEXT
+#define FDB     .WORD
+#define END		.END
+
+#define equ     .EQU
+#define org     .ORG
+#define rmb     .BLOCK
+#define defb	.BYTE
+#define fcc     .TEXT
+#define fdb     .WORD
+#define	end		.END
+
+
+;**************************************************
+;VZ ROM entry vector addresses
+;**************************************************
+POLCAT	equ	$FFDC		; Read the keyboard
+
+
+;**************************************************
+;VZ Graphics hardware definitions
+;**************************************************
+
+;video RAM $7000-$77FF
+;$6800 Bit 3 of cassette/Speaker/vdg control latch sets hi-res graphics when = 1
+;Bit 4 = VDG background 128x64
+
+
+;	out	32,!00000000			;text screen page zero
+;	bits 0-1 = bank select
+;	bits 2-4 = graphics mode 0-7
+;	bit 5 = internal/external font control
+
+;	out 6800,
+	
+;	LD	HL,SOURCE
+;	LD	DE,DESTINATION
+;	LD	BC,SIZE
+;	LD	(HL),CHARACTER
+;	LDIR
+;	RET
+
+#define	screen	7000h		; address of VZ screen memory
+#define	vdgport	20h			; I/O port address to set the VDG mode
+
+#define	vdgcmode	6800h	; address to set color palette and graphics/text select
+#define	vdgcolor0	00000000b
+#define	vdgcolor1	00010000b
+
+;#define	vpage	222
+
+#define	CG1	00000000b	; CG1 graphics mode bits
+#define	RG1	00010000b	; RG1 graphics mode bits
+#define	CG2	00001000b	; CG2 graphics mode bits
+#define	RG2	00011000b	; RG2 graphics mode bits
+#define	CG3	00000100b	; CG3 graphics mode bits
+#define	RG3	00010100b	; RG3 graphics mode bits
+#define	CG6	00001100b	; CG6 graphics mode bits
+#define	RG6	00011100b	; RG6 graphics mode bits
+
+#define	CSS	00010000b	; color set select bit
+#define GFX	00001000b	; graphics mode select
+
+
+
+;**************************************************
+;* screen parameters
+;*
+;*  Define the graphics mode you are going to use as 1
+;*  This is used to set up all the screen parameters used by
+;*  the graphics routines so they will work in your 
+;*  chosen mode. 
+;**************************************************
+#define GFX_RG6	1		; Set the mode we will use here
+
+;**************************************************
+;* sets up the screen parameters based on define above
+;**************************************************
+#ifdef GFX_CG1			; parameters for CG1
+#define	CGMODE 1
+ScreenWidth		equ	64
+ScreenHeight	equ	64
+BytesPerLine	equ	(ScreenWidth)/4
+#endif
+#ifdef GFX_CG2			; parameters for CG2
+#define	CGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	64
+BytesPerLine	equ	(ScreenWidth)/4
+#endif
+#ifdef GFX_CG3			; parameters for CG3
+#define	CGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	96
+BytesPerLine	equ	(ScreenWidth)/4
+#endif
+#ifdef GFX_CG6			; parameters for CG6
+#define	CGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	192
+BytesPerLine	equ	(ScreenWidth)/4
+#endif
+
+#ifdef GFX_RG1			; parameters for RG1
+#define	RGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	64
+BytesPerLine	equ	((ScreenWidth)/8)
+#endif
+#ifdef GFX_RG2			; parameters for RG2
+#define	RGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	96
+BytesPerLine	equ	((ScreenWidth)/8)
+#endif
+#ifdef GFX_RG3			; parameters for RG3
+#define	RGMODE 1
+ScreenWidth		equ	128
+ScreenHeight	equ	192
+BytesPerLine	equ	((ScreenWidth)/8)
+#endif
+#ifdef GFX_RG6			; parameters for RG4
+#define	RGMODE 1
+#define	ScreenWidth	256
+#define	ScreenHeight	192
+#define	BytesPerLine	((ScreenWidth)/8)
+#endif
+
+#define VidRAMSize	2048	; size of video RAM window
+;BytesPerLine*ScreenHeight
+
+
+;**************************************************
+; graphics text routine macros
+;**************************************************
+#DEFINE PRINTAT(loc,str) ld bc,loc \ ld hl,str \ call print_at
+#DEFINE PRINT(str) ld hl,str \ call print
+
+#DEFINE SETVDG() out (vdgport),a
+
+;#DEFINE SETVDG(mode,page)	ld a,mode+page \ out (vdgport),a
+
+#DEFINE	DEMO2	1
+
+;**************************************************
+;**************************************************
+
+START	org	$B000		;where to store out program
+
+;*****************
+; test code
+;*****************
+	di
+	
+	call	CLS					;clear the screen
+
+	ld		a,GFX+vdgcolor0		;set to graphics with color set
+	ld		(vdgcmode),a
+	ld		a,RG6
+	SETVDG()					;set the graphics mode to 256x192 B&W
+
+#ifdef DEMO1	
+	PRINTAT(24,string1)			;demo the print routines
+	PRINTAT(8*64+24,string2)
+	PRINTAT(2*8*64+24,string3)
+neverquit:
+	jr		neverquit
+#endif
+
+#ifdef DEMO2	
+	ld		hl,sstring
+neverquit:
+	xor		a				;clear a
+	ld		(hl),a
+loopy:
+	ld		(hl),a
+	call	print
+	ld		hl,sstring
+	ld		a,(hl)
+	inc		a
+	cp		96
+	jr		nz,loopy
+	jr		neverquit
+#endif
+
+	ret
+	
+sstring:
+	defb	" ",0
+	
+string1:
+	defb	"Graphics Page 0",0
+string2:
+	defb	"Graphics Page 1",0
+string3:
+	defb	"Graphics Page 2",0
+	
+	
+;*****************
+
+;**************************************************
+; clear the graphics screen
+;**************************************************	
+CLS:
+	;set graphics page to 0
+	ld		a,RG6+0					;RG6 page 0
+	SETVDG()
+	call	zero_fill_screen		;clear page
+	
+	;set graphics page to 1
+	ld		a,RG6+1					;RG6 page 1
+	SETVDG()
+	call	zero_fill_screen		;clear page
+	
+	;set graphics page to 2
+	ld		a,RG6+2					;RG6 page 2
+	SETVDG()
+	;fall through to fill_screen and return directly from there
+	
+;**************************************************
+zero_fill_screen:
+	ld		hl,screen				;source
+	ld		de,screen+1				;destination
+	ld		bc,VidRAMSize-1			;number of bytes to clear
+	xor		a						;clear a
+	ld		(hl),a					;clear first byte
+	ldir							;clear the rest
+
+	ret
+	
+;**************************************************
+
+
+;**************************************************
+; print_at
+;**************************************************
+; 64 characters by 24 lines in RG6 mode
+; print_at locations 0-1535 (64*24-1)
+; HL contains string pointer
+; BC contains print@ location
+;
+; Since screen width is 64 (0-63), lowest 6 bits of bc is column
+; The next 5 bits are the row
+;**************************************************
+print_at:
+		ld		a,c						;get the print at low byte
+		and		(BytesPerLine*2)-1		;%00111111 ;mask off row bits
+		ld		(AT_COL),a				;set the column
+		ld		a,b						;get the print at upper byte 
+		and		%00000111				;mask off top bits so carry isn't impacted
+		rl		c						;rotate top 2 bits into a through the carry
+		rl		a
+		rl		c
+		rl		a
+		ld		(AT_ROW),a				;save row
+		;fall through to print
+
+;**************************************************
+; print		
+;**************************************************
+; hl contains the string pointer
+;**************************************************
+print:
+		ld		a,(AT_ROW)
+		ld		b,0
+;_cagain:
+		cp		8
+		jr		c,_cnext	;less than
+		sbc		a,8			;adjust for next page
+		inc		b
+
+		cp		8
+		jr		c,_cnext	;less than
+		sbc		a,8			;adjust for next page
+		inc		b
+
+		cp		8
+		jr		c,_cnext	;less than
+		sbc		a,8			;adjust for next page
+		inc		b
+		
+;		jr		_cagain
+_cnext:
+		ld		(AT_IROW),a
+		ld		a,b
+		add		a,RG6
+		SETVDG()
+
+_nextchar:
+		ld		a,(hl)				;get character
+		cp		0					;string terminator?
+		jr		z,_printexit		; exit if zero (string terminator)
+
+;		cp							;carriage return?
+;		jr		z,_creturn			; handle it if so
+;		cp							;linefeed?
+;		jr		z,_lfeed			; handle it if so
+;tab?
+;bell?
+;home?
+
+		push	hl					;save string pointer
+		call	print_64			;output a character
+		pop		hl					;restore string pointer
+
+		inc		hl					;point to next character in the string
+		
+		;update the column
+		ld		a,(AT_COL)			; next column
+		inc		a
+		ld		(AT_COL),a
+		cp		BytesPerLine*2		;64 chsrs / line (0-63)
+		jr		nz,_nextchar		; is column past the end of a line?  Keep printing if not.
+
+		;wrap the line, update column, row, scroll
+		xor		a					;clear a
+		ld		(AT_COL),a			;set column to zero
+
+_lfeed:
+		ld		a,(AT_ROW)			;increment the row
+		inc		a
+		ld		(AT_ROW),a
+		cp		(ScreenHeight/8)	;24 lines (0-23)
+		jr		c,print				; branch if row isn't past the end of the screen
+
+		dec		a					;reduce row back to last line
+		ld		(AT_ROW),a
+		call	scroll				;scroll the screen
+		jr		print
+		
+_creturn:
+		ld		a,0
+		ld		(AT_COL),a			; set column to zero
+		jr		print				;keep printing
+
+_printexit:
+		ret
+;**************************************************
+
+		
+;**************************************************
+; scroll
+;**************************************************
+; scroll the paged graphics screen
+;**************************************************
+scroll:
+	;***********************
+	;scroll page 0
+	;***********************
+	ld	a,RG6+0							;RG6 page 0
+	SETVDG()
+	call	scroll_page
+	
+	;***********************
+	;copy line of characters from page 1 to page 0
+	;***********************
+	ld	a,RG6+1							;RG6 page 1 (source page)
+	SETVDG()
+	ld	hl,screen						;copy from source page to buffer
+	ld	de,Scroll_Buffer
+	ld	bc,BytesPerLine*8				;1 row of characters 8 bits high
+	ldir
+
+	ld	a,RG6+0							;RG6 page 0 (destination page)
+	SETVDG()
+	ld	hl,Scroll_Buffer				;copy from buffer to destination page
+	ld	de,BytesPerLine*8*7+screen
+	ld	bc,BytesPerLine*8				;1 row of characters 8 bits high
+	ldir
+	
+	;***********************
+	;scroll page 1
+	;***********************
+	ld	a,RG6+1							;RG6 page 1 (source page)
+	SETVDG()
+	call	scroll_page
+
+	;***********************
+	;copy line of characters from page 2 to page 1
+	;***********************
+	ld	a,RG6+2							;RG6 page 2 (source page)
+	SETVDG()
+	ld	hl,screen						;copy from source page to buffer
+	ld	de,Scroll_Buffer
+	ld	bc,BytesPerLine*8				;1 row of characters 8 bits high
+	ldir
+
+	ld	a,RG6+1							;RG6 page 1 (destination page)
+	SETVDG()
+	ld	hl,Scroll_Buffer				;copy from buffer to destination page
+	ld	de,BytesPerLine*8*7+screen		;56=8*7
+	ld	bc,BytesPerLine*8				;1 row of characters 8 bits high
+	ldir
+	
+	;***********************
+	;scroll page 2
+	;***********************
+	ld	a,RG6+2							;RG6 page 2
+	SETVDG()
+	call	scroll_page
+
+	;***********************
+	;clear last line
+	;***********************
+	ld	hl,BytesPerLine*8*7+screen		;BytesPerLine * # of lines per character * 7 lines + screen address
+	ld	(hl),0							;store 0 at fist address
+	ld	de,BytesPerLine*8*7+1+screen	;ld de,hl+1
+	ld	bc,BytesPerLine*8-1				;one line minus first byte.
+	ldir
+	
+	ret
+	
+;**************************************************
+scroll_page:
+	ld	hl,BytesPerLine*8+screen	;source						;address of 2nd line on page
+	ld	de,screen					;destination				;address of 1st line on page
+	ld	bc,ScreenHeight/3 * BytesPerLine - BytesPerLine*8		;number of rows for 1/3 of the screen -1 (lines on page to be scrolled)
+	ldir
+
+	ret
+;**************************************************
+		
+;**************************************************
+;* 64#4 - 4x8 FONT DRIVER FOR 64 COLUMNS (c) 2007, 2011, 2013
+;*
+;* Original by Andrew Owen (657 bytes)
+;* Optimized by Crisis (602 bytes)
+;* Reimplemented by Einar Saukas (496 bytes)
+;* VZ implementation by James Diffendaffer (424 bytes)
+;**************************************************
+print_64:
+DRIVER:
+		ld		b,a				; store character value in B  (was E)
+
+		
+		; Calculate location of the first byte to be changed on screen
+		; The row value is a 3 bit value (0-7), here represented as %00000rrr
+		; The column value is a 6 bits value (0-63), here represented as %00CCCCCc
+		;; Formula: screen + ((row & 0x18) << 8) + ((row & 0x07) << 5) + (col >> 1) ;;;;the spectrum version
+		; Formula: screen MSB (70) + IROW   screen LSB (0) + (col >> 1)
+		
+		; IROW is corrected for the screen page by subtracting 8 for each page above 0 by the caller
+		ld		a,(AT_IROW)		;get the screen page row
+		adc		a,70h			;add screen MSB (from $7000)
+		ld		d,a				;save it
+
+		ld		a,(AT_COL)		;get the column
+		ld		c,a				;grab a copy
+		rra						;least significant bit only indicates which half of byte character is on
+		ld		e,a				;screen LSB is 0 so just put a in e
+		
+		ld		a,b				;get the current character
+		
+		; Check if character font must be rotated, self-modifying the code accordingly
+        xor		c				; compare BIT 0 from character value and column
+        rra
+
+        ld		a, 256-(END_LOOP-SKIP_RLC)	; instruction DJNZ skipping rotation
+        jr		nc, NOT_RLC					; decide based on BIT 0 comparison
+        ld		a, 256-(END_LOOP-INIT_RLC)	; instruction DJNZ using rotation
+NOT_RLC:
+        ld		(END_LOOP - 1),a			; modify DJNZ instruction directly
+
+		; Check the half screen byte to be changed, self-modifying the code accordingly
+        srl		c							; check BIT 0 from current column
+        ld		a,00001111b					; mask to change left half of the screen byte
+        jr		nc, SCR_LEFT				; decide based on odd or even column
+        cpl									; mask to change right half of the screen byte
+SCR_LEFT:
+        ld		(SCR_MASK + 1),a			; modify screen mask value directly
+        cpl
+        ld		(SKIP_RLC + 1),a			; modify font mask value directly
+		
+		; Calculate location of the character font data in FONT_ADDR
+		; Formula: FONT_ADDR + 7 * INT ((char-32)/2) - 1
+		ld		h,0
+		ld		l,b				; now HL = char
+		srl		l				; now HL = INT (char/2)
+
+		ld		b,h
+        ld      c,l				; now BC = INT (char/2)
+        add     hl,hl			; now HL = 2 * INT (char/2)
+        add     hl,hl			; now HL = 4 * INT (char/2)
+        add     hl,hl			; now HL = 8 * INT (char/2)
+        sbc     hl,bc			; now HL = 7 * INT (char/2)
+        ld      bc,FONT_ADDR - 71h
+        add     hl,bc			; now HL = FONT_ADDR + 7 * INT (char/2) - 0x7130
+
+		; Main loop to copy 8 font bytes into screen (1 blank + 7 from font data)
+
+        xor     a               ; first font byte is always blank
+        ld      b, 8            ; execute loop 8 times
+		jr		SKIP_RLC
+INIT_RLC:
+        rlca                    ; switch position between bits 0-3 and bits 4-7
+        rlca
+        rlca
+        rlca
+SKIP_RLC:
+        and     11110000b       ; mask half of the font byte
+        ld      c,a             ; store half of the font byte in C
+        ld      a,(de)          ; get screen byte
+SCR_MASK:
+        and     00001111b       ; mask half of the screen byte
+        or      c               ; combine half screen and half font
+        ld      (de),a          ; write result back to screen
+        ld		a,e				; next screen line
+		add		a,32
+		ld		e,a
+		ld		a,d
+		adc		a,0
+		ld		d,a
+        inc     hl              ; next font data location
+        ld      a,(hl)          ; store next font byte in A
+        djnz    INIT_RLC        ; repeat loop 8 times
+END_LOOP:
+		ret
+		
+;**************************************************
+
+
+		
+;**************************************************
+; LOCAL VARIABLES
+;**************************************************
+AT_COL:
+        defb    0				; current column position (0-31)
+AT_ROW:
+        defb    0				; current row position (0-23)
+AT_IROW:
+		defb	0	;,70h			;70h is upper byte of screen address
+
+;**************************************************
+; HALF WIDTH 4x8 FONT designed by Andrew Owen
+; Top row is always zero and not stored (96 chars x 7 / 2 = 336 bytes)
+;**************************************************
+FONT_ADDR:
+        defb    02h, 02h, 02h, 02h, 00h, 02h, 00h        ; !
+        defb    52h, 57h, 02h, 02h, 07h, 02h, 00h        ;"#
+        defb    25h, 71h, 62h, 32h, 74h, 25h, 00h        ;$%
+        defb    22h, 42h, 30h, 50h, 50h, 30h, 00h        ;&'
+        defb    14h, 22h, 41h, 41h, 41h, 22h, 14h        ;()
+        defb    20h, 70h, 22h, 57h, 02h, 00h, 00h        ;*+
+        defb    00h, 00h, 00h, 07h, 00h, 20h, 20h        ;,-
+        defb    01h, 01h, 02h, 02h, 04h, 14h, 00h        ;./
+		defb    22h, 56h, 52h, 52h, 52h, 27h, 00h        ;01
+        defb    27h, 51h, 12h, 21h, 45h, 72h, 00h        ;23
+        defb    57h, 54h, 56h, 71h, 15h, 12h, 00h        ;45
+        defb    17h, 21h, 61h, 52h, 52h, 22h, 00h        ;67
+        defb    22h, 55h, 25h, 53h, 52h, 24h, 00h        ;89
+        defb    00h, 00h, 22h, 00h, 00h, 22h, 02h        ;:;
+        defb    00h, 10h, 27h, 40h, 27h, 10h, 00h        ;<=
+        defb    02h, 45h, 21h, 12h, 20h, 42h, 00h        ;>?
+        defb    23h, 55h, 75h, 77h, 45h, 35h, 00h        ;@A
+        defb    63h, 54h, 64h, 54h, 54h, 63h, 00h        ;BC
+        defb    67h, 54h, 56h, 54h, 54h, 67h, 00h        ;DE
+        defb    73h, 44h, 64h, 45h, 45h, 43h, 00h        ;FG
+        defb    57h, 52h, 72h, 52h, 52h, 57h, 00h        ;HI
+        defb    35h, 15h, 16h, 55h, 55h, 25h, 00h        ;JK
+        defb    45h, 47h, 45h, 45h, 45h, 75h, 00h        ;LM
+        defb    62h, 55h, 55h, 55h, 55h, 52h, 00h        ;NO
+        defb    62h, 55h, 55h, 65h, 45h, 43h, 00h        ;PQ
+        defb    63h, 54h, 52h, 61h, 55h, 52h, 00h        ;RS
+        defb    75h, 25h, 25h, 25h, 25h, 22h, 00h        ;TU
+        defb    55h, 55h, 55h, 55h, 27h, 25h, 00h        ;VW
+        defb    55h, 55h, 25h, 22h, 52h, 52h, 00h        ;XY
+        defb    73h, 12h, 22h, 22h, 42h, 72h, 03h        ;Z[
+        defb    46h, 42h, 22h, 22h, 12h, 12h, 06h        ;\]
+        defb    20h, 50h, 00h, 00h, 00h, 00h, 0fh        ;^_
+        defb    20h, 10h, 03h, 05h, 05h, 03h, 00h        ;£a
+        defb    40h, 40h, 63h, 54h, 54h, 63h, 00h        ;bc
+        defb    10h, 10h, 32h, 55h, 56h, 33h, 00h        ;de
+        defb    10h, 20h, 73h, 25h, 25h, 43h, 06h        ;fg
+        defb    42h, 40h, 66h, 52h, 52h, 57h, 00h        ;hi
+        defb    14h, 04h, 35h, 16h, 15h, 55h, 20h        ;jk
+        defb    60h, 20h, 25h, 27h, 25h, 75h, 00h        ;lm
+        defb    00h, 00h, 62h, 55h, 55h, 52h, 00h        ;no
+        defb    00h, 00h, 63h, 55h, 55h, 63h, 41h        ;pq
+        defb    00h, 00h, 53h, 66h, 43h, 46h, 00h        ;rs
+        defb    00h, 20h, 75h, 25h, 25h, 12h, 00h        ;tu
+        defb    00h, 00h, 55h, 55h, 27h, 25h, 00h        ;vw
+        defb    00h, 00h, 55h, 25h, 25h, 53h, 06h        ;xy
+        defb    01h, 02h, 72h, 34h, 62h, 72h, 01h        ;z{
+        defb    24h, 22h, 22h, 21h, 22h, 22h, 04h        ;|}
+        defb    56h, 0A9h, 06h, 04h, 06h, 09h, 06h       ;~©
+;**************************************************
+
+;Scroll_Buffer:
+;		defb	BytesPerLine*8	; temporary buffer for copying across page boundary
+Scroll_Buffer	equ		$6000
+	
+		end
+;**************************************************
+;**************************************************
